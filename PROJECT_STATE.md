@@ -9,11 +9,15 @@ Stage 4 complete. Next: Stage 5.
 - Stage 2 accepted: testable CLI skeleton at commit 71854d7. All four CI jobs were green on that commit
 - Stage 3 accepted: immutable data models at commit 4223dc7. All four CI jobs were green on that commit
 - Stage 4 accepted: bounded strict manifest reader and closed-schema validator at commit 1a9b829. All four CI jobs were green on that commit
+- Housekeeping after Stage 4: GitHub account renamed, remote and copyright line updated (see Repository)
 
 ## Repository
-- https://github.com/Jatin-Gupta-spec/proofsentinel (branch main)
-- Commits use the GitHub noreply address
+- https://github.com/jatintrace/proofsentinel (branch main)
+- The GitHub account was renamed from Jatin-Gupta-spec to jatintrace. GitHub redirected the old address; origin now points at the new address, and git ls-remote showed the same commit (12b49ac) there as locally
+- Commits use the GitHub noreply address, which identifies the account by number and is unchanged by the rename
 - Open item: confirm the GitHub setting "Block command line pushes that expose my email" is enabled
+- Open item: open one recent commit on GitHub and confirm it still shows the profile picture and username
+- Open item: the TriageAI and SecureGuard clones may still point at the old username (the redirect works). Updating their remotes is optional and is not part of building ProofSentinel
 
 ## Environment (from real command output)
 - Python 3.14.6 (only install, py launcher default): %LOCALAPPDATA%\Programs\Python\Python314\python.exe
@@ -92,7 +96,7 @@ Stage 4 complete. Next: Stage 5.
 
 ## Decisions
 - v0.1 scope is frozen. Any change needs an entry here first.
-- License: MIT. The copyright notice uses the GitHub handle Jatin-Gupta-spec (can be changed before wider publication).
+- License: MIT. The copyright notice uses the GitHub handle jatintrace (renamed from Jatin-Gupta-spec); it can be changed to a real name before wider publication.
 - requires-python >= 3.11. Runtime uses the standard library only.
 - Time-box / stop rule: not set yet (owner to decide).
 

@@ -1,13 +1,14 @@
 # PROJECT_STATE
 
 ## Current stage
-Stage 3 complete. Next: Stage 4.
+Stage 4 complete. Next: Stage 5.
 
 ## Stage history
 - Stage 0 accepted: spec v1.2 frozen and TriageAI tag verified (project commit e925e45)
 - Stage 1 accepted: repository, dev tooling, documentation skeleton, MIT license and CI. All four CI jobs were green at commit 9669901
 - Stage 2 accepted: testable CLI skeleton at commit 71854d7. All four CI jobs were green on that commit
 - Stage 3 accepted: immutable data models at commit 4223dc7. All four CI jobs were green on that commit
+- Stage 4 accepted: bounded strict manifest reader and closed-schema validator at commit 1a9b829. All four CI jobs were green on that commit
 
 ## Repository
 - https://github.com/Jatin-Gupta-spec/proofsentinel (branch main)
@@ -40,14 +41,30 @@ Stage 3 complete. Next: Stage 4.
 - Test lesson: changing the unimplemented-command return code to 0 passed Ruff and mypy but failed 3 behavior tests
 
 ## Data models (Stage 3)
-- Module: src/proofsentinel/models.py. Tests: tests/test_models.py. 47 tests pass in total
+- Module: src/proofsentinel/models.py. Tests: tests/test_models.py
 - 14 dataclasses (Limits, TargetDescriptor, CanaryRegistration, Assertion, CheckDefinition, Manifest, InvocationResult, AssertionResult, CheckResult, Totals, CanonicalResults, RunMetadata, EvidenceIndexEntry, EvidenceIndex), all frozen, slotted and keyword-only. A generic test enforces this for every model class
 - StrEnums: CheckType (the 7 v0.1 check types), CheckStatus (PASS, FAIL, ERROR only; no SKIP), AssertionKind, GitObjectFormat, CompletionState
-- Hard ceilings from the contract are constants (200 checks, 100 invocations, 600 s per command, 1800 s overall, 1 MiB streams, argv limits, 100 MiB file hashing). Stage 4 enforces them
+- Hard ceilings from the contract are constants (200 checks, 100 invocations, 600 s per command, 1800 s overall, 1 MiB streams, argv limits, 100 MiB file hashing)
 - Defaults fail closed: expected_exit 0, require_clean_git True
 - CanaryRegistration.value is hidden from repr(), but dataclasses.asdict() still exposes it (shown in the Stage 3 exercise). Rule for Stage 9: the evidence writer must never receive a Manifest or CanaryRegistration. It accepts only result models and converts them with explicit, hand-written field lists, never asdict() or vars(). The whole-bundle canary scan (Stage 12) is a second layer, not the only one
-- Models validate nothing. Stage 4's validator is the only door manifest data may pass through
+- Models validate nothing. The manifest validator is the only door manifest data may pass through
 - Test lesson: a first draft of the keyword-only test still passed with the protection removed. Breaking the code on purpose exposed it, and the test was rewritten
+
+## Manifest validator (Stage 4)
+- Module: src/proofsentinel/manifest.py. Tests: tests/test_manifest.py. 168 tests pass in total
+- API: read_manifest_bytes(path) -> bytes, parse_manifest(bytes) -> Manifest, ManifestError. There is deliberately no all-in-one load function: read the file once, hash those exact bytes for the evidence, and parse the same bytes
+- Reading: stat before open (refuses pipes and non-regular files without blocking), fstat on the opened file, read of at most 1 MiB + 1 byte, then an explicit too-large check
+- Decoding: strict UTF-8; UTF-8, UTF-16 and UTF-32 byte order marks are rejected; tomllib rejects duplicate keys; over-deep nesting is rejected without crashing
+- Closed schema: unknown keys are errors at every level. Top-level keys: schema_version, target, modules, limits (optional), canaries (optional), checks. schema_version must be exactly 1
+- Types are strict: true is not accepted as an integer, and strings are not converted to numbers. Every identifier pattern uses fullmatch, so a trailing newline is rejected
+- Supported check types: command and determinism only. The other five known types (file, git, release_claim, canary, performance) are rejected with "not supported yet" until their stages
+- Rejected on purpose: zero checks, empty stdout_contains or stderr_contains strings, duplicate check ids, Windows reserved device names as check ids, a determinism check with fewer than 2 repetitions, a command check with repetitions, modules outside modules.allow, expected_exit outside 0 to 255
+- Limits enforced: 200 checks, 100 total invocations after expanding repetitions, 128 args, 4096 bytes per arg, 16 KiB args in total, 600 s per command, 1800 s overall, 1 MiB per stream
+- Canaries: values must match PS_TEST_[A-Z0-9_]{8,120} and be unique. A canary value in an argument is rejected. No error message ever contains a canary value. Untrusted text in errors is shown with repr(), so control characters appear as escapes
+- Only the first error is reported (deterministic). Errors name the field, for example checks[0].stdout_contains[0]
+- target.root and target.python are stored exactly as written. They are not resolved or checked. That is Stage 5
+- validate in the CLI is still not implemented on purpose. Wiring it to this validator alone would report "valid" before path and command-plan checks exist, which would be a false pass. It gets wired after the validation pipeline is complete
+- Test lessons: my first draft had two bad tests (one referenced a removed canary; one put "checks = []" after a [table] header, where TOML scopes it to that table). A scratch run that deliberately broke the validator 21 ways was caught by the tests every time. Exercise: an empty stdout_contains passes on a crash, and a BOM means the reviewed bytes differ from the bytes used
 
 ## Frozen inputs
 - Spec: spec\ProofSentinel_Final_Project_Specification_Audited_v1.2.md
@@ -67,9 +84,11 @@ Stage 3 complete. Next: Stage 4.
 - Local Python (3.14) is newer than the CI versions (3.11 and 3.13). 3.14 is not in the CI matrix.
 - GitHub Actions are pinned by major version tag, not commit ID. Pinning by commit ID is a deferred hardening step. actions/setup-python v7 appears to exist and has not been reviewed.
 - Working-tree files use CRLF line endings (VS Code on Windows). Decide a line-ending policy before Stage 13 hashes repository files.
-- CheckDefinition has only the fields shared by all checks. Fields specific to the file, git, release_claim, canary and performance checks are added in the stages that implement them.
+- CheckDefinition has only the fields shared by command and determinism checks. Fields for file, git, release_claim, canary and performance checks are added in the stages that implement them.
 - models.py has one suppression: "# noqa: S105" on CheckStatus.PASS. Ruff mistakes the status name for a password. It is a documented false positive, suppressed on that line only.
-- CI runs 47 tests. Green CI shows the CLI contract and the data definitions hold, not that ProofSentinel can validate, run or verify anything yet.
+- The manifest file itself may be a symlink: the operator names it explicitly and the spec only restricts links for target roots and evidence paths. The validator follows it.
+- Only the first manifest error is reported. Collecting all errors is a possible later improvement.
+- CI runs 168 tests. Green CI shows the CLI contract, the data definitions and the manifest validation hold, not that ProofSentinel can run or verify anything yet.
 
 ## Decisions
 - v0.1 scope is frozen. Any change needs an entry here first.
@@ -78,4 +97,4 @@ Stage 3 complete. Next: Stage 4.
 - Time-box / stop rule: not set yet (owner to decide).
 
 ## Next
-Stage 4: safe bounded strict-UTF-8 TOML reading and closed-schema validation. It enforces the hard ceilings in models.py and builds a Manifest only from validated data. Nothing is executed.
+Stage 5: canonical target, Python, fixture and evidence paths with traversal and link tests. Paths are resolved and checked against the target root; nothing is executed. Symlink tests will skip on this machine, so CI must show them running.
